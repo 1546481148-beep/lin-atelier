@@ -1,0 +1,27 @@
+{
+  "name": "my-brand-blog",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:init": "prisma db push",
+    "db:seed": "node prisma/seed-local-auth.js",
+    "db:setup": "npm run db:generate && npm run db:init && npm run db:seed"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "gray-matter": "^4.0.3",
+    "next": "^16.2.1",
+    "prisma": "^6.19.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remark": "^15.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-html": "^16.0.1"
+  }
+}

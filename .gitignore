@@ -1,0 +1,9 @@
+.codex
+.next
+node_modules
+.vercel
+.env
+.env*.local
+npm-debug.log*
+dev.db
+*.db
