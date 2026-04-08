@@ -10,7 +10,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:init": "prisma db push",
-    "db:seed": "node prisma/seed-local-auth.js",
+    "db:seed": "prisma db execute --file prisma/seed.sql --schema prisma/schema.prisma",
     "db:setup": "npm run db:generate && npm run db:init && npm run db:seed"
   },
   "dependencies": {
