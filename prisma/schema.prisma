@@ -20,6 +20,12 @@ enum PostStatus {
   REJECTED
 }
 
+enum IncomingLinkStatus {
+  PENDING
+  READY
+  FAILED
+}
+
 model User {
   id               String            @id @default(cuid())
   name             String
@@ -29,6 +35,8 @@ model User {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   posts            Post[]
+  incomingLinks    IncomingLink[]    @relation("IncomingLinkActor")
+  incomingLinkAttempts IncomingLinkAttempt[] @relation("IncomingLinkAttemptActor")
   auditLogs        AuditLog[]        @relation("AuditActor")
   postReviewEvents PostReviewEvent[] @relation("PostReviewActor")
 }
@@ -86,5 +94,43 @@ model PostReviewEvent {
   actor      User?       @relation("PostReviewActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([postId, createdAt])
+  @@index([actorId])
+}
+
+model IncomingLink {
+  id             String             @id @default(cuid())
+  sourcePlatform String             @default("manual")
+  originalUrl    String             @unique
+  hostname       String
+  title          String?
+  summary        String?
+  coverImage     String?
+  status         IncomingLinkStatus @default(PENDING)
+  rawPayload     Json?
+  errorMessage   String?
+  fetchedAt      DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  actorId        String?
+  actor          User?              @relation("IncomingLinkActor", fields: [actorId], references: [id], onDelete: SetNull)
+  attempts       IncomingLinkAttempt[]
+
+  @@index([status, createdAt])
+  @@index([actorId])
+  @@index([hostname])
+}
+
+model IncomingLinkAttempt {
+  id             String             @id @default(cuid())
+  incomingLinkId String
+  actorId        String?
+  action         String
+  status         IncomingLinkStatus
+  message        String?
+  createdAt      DateTime           @default(now())
+  incomingLink   IncomingLink       @relation(fields: [incomingLinkId], references: [id], onDelete: Cascade)
+  actor          User?              @relation("IncomingLinkAttemptActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([incomingLinkId, createdAt])
   @@index([actorId])
 }

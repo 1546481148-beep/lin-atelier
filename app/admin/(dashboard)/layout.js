@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { signOut } from "../actions";
 import { requireSessionUser, roleLabels } from "../../../lib/auth";
 
@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 const navItems = [
   { href: "/admin", label: "概览", roles: ["ADMIN", "EDITOR", "READER"] },
   { href: "/admin/posts", label: "文章", roles: ["ADMIN", "EDITOR"] },
+  { href: "/admin/incoming-links", label: "链接接收", roles: ["ADMIN", "EDITOR"] },
   { href: "/admin/review", label: "待审核", roles: ["ADMIN"] },
   { href: "/admin/posts/new", label: "新建", roles: ["ADMIN", "EDITOR"] },
   { href: "/admin/logs", label: "日志", roles: ["ADMIN"] },
@@ -52,7 +53,9 @@ export default async function AdminDashboardLayout({ children }) {
           </nav>
           <div className="admin-sidebar-note">
             <strong>现在能做的事</strong>
-            <span>这里现在可以管文章、用户和密码，后面再继续往更完整的后台补。</span>
+            <span>
+              这里已经可以管理文章、审核流、外部链接接收和用户账户，适合继续往真正的平台后台扩展。
+            </span>
           </div>
         </aside>
 

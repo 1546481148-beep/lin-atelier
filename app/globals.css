@@ -1668,6 +1668,107 @@ img {
   font: inherit;
 }
 
+.admin-flash {
+  margin: 0;
+  padding: 14px 18px;
+  border-radius: 18px;
+  font-size: 0.96rem;
+}
+
+.admin-flash-success {
+  background: rgba(219, 245, 228, 0.88);
+  border: 1px solid rgba(61, 122, 78, 0.16);
+}
+
+.admin-flash-error {
+  background: rgba(255, 233, 227, 0.92);
+  border: 1px solid rgba(163, 63, 47, 0.2);
+}
+
+.admin-guide-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.admin-guide-card {
+  display: grid;
+  gap: 14px;
+  padding: 22px 24px;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.84);
+  border: 1px solid rgba(22, 17, 14, 0.08);
+}
+
+.admin-code-block {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 18px;
+  overflow-x: auto;
+  background: rgba(22, 17, 14, 0.94);
+  color: rgba(255, 248, 240, 0.96);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.admin-guide-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.admin-inline-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.admin-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-filter-row a {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 17, 14, 0.12);
+  color: var(--text);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.admin-filter-row a.is-active {
+  background: var(--accent);
+  color: #fffaf5;
+  border-color: transparent;
+}
+
+.admin-list-main {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-list-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-link-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.admin-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .admin-form {
   display: grid;
   gap: 18px;

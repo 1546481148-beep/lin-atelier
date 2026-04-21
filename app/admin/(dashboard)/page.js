@@ -1,9 +1,9 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { PostStatus } from "@prisma/client";
 import { getAuditLogs } from "../../../lib/audit-log";
 import { requireSessionUser, roleLabels } from "../../../lib/auth";
+import { withAdminDbFallback, prisma } from "../../../lib/admin-db";
 import { postStatusLabels } from "../../../lib/post-workflow";
-import { prisma } from "../../../lib/prisma";
 
 export const metadata = {
   title: "后台概览",
@@ -21,31 +21,59 @@ function formatDateTime(date) {
 
 export default async function AdminDashboardPage() {
   const user = await requireSessionUser();
-
   const postWhere = user.role === "ADMIN" ? {} : { authorId: user.id };
-  const [draftCount, reviewCount, publishedCount, recentPosts, recentLogs] = await Promise.all([
-    prisma.post.count({ where: { ...postWhere, status: PostStatus.DRAFT } }),
-    prisma.post.count({ where: { ...postWhere, status: PostStatus.IN_REVIEW } }),
-    prisma.post.count({ where: { ...postWhere, status: PostStatus.PUBLISHED } }),
-    prisma.post.findMany({
-      where: postWhere,
-      orderBy: { updatedAt: "desc" },
-      take: 4,
-      include: {
-        author: {
-          select: {
-            name: true,
+
+  const dashboardData = await withAdminDbFallback(async () => {
+    const [draftCount, reviewCount, publishedCount, recentPosts, recentLogs] =
+      await Promise.all([
+        prisma.post.count({ where: { ...postWhere, status: PostStatus.DRAFT } }),
+        prisma.post.count({ where: { ...postWhere, status: PostStatus.IN_REVIEW } }),
+        prisma.post.count({ where: { ...postWhere, status: PostStatus.PUBLISHED } }),
+        prisma.post.findMany({
+          where: postWhere,
+          orderBy: { updatedAt: "desc" },
+          take: 4,
+          include: {
+            author: {
+              select: {
+                name: true,
+              },
+            },
           },
-        },
-      },
-    }),
-    user.role === "READER"
-      ? Promise.resolve([])
-      : getAuditLogs({
-          limit: 5,
-          actorId: user.role === "ADMIN" ? undefined : user.id,
         }),
-  ]);
+        user.role === "READER"
+          ? Promise.resolve([])
+          : getAuditLogs({
+              limit: 5,
+              actorId: user.role === "ADMIN" ? undefined : user.id,
+            }),
+      ]);
+
+    return {
+      draftCount,
+      reviewCount,
+      publishedCount,
+      recentPosts,
+      recentLogs,
+      dbAvailable: true,
+    };
+  }, {
+    draftCount: 0,
+    reviewCount: 0,
+    publishedCount: 0,
+    recentPosts: [],
+    recentLogs: [],
+    dbAvailable: false,
+  });
+
+  const {
+    draftCount,
+    reviewCount,
+    publishedCount,
+    recentPosts,
+    recentLogs,
+    dbAvailable,
+  } = dashboardData;
 
   return (
     <div className="admin-page-stack">
@@ -57,6 +85,12 @@ export default async function AdminDashboardPage() {
           </div>
           <p>这里先放最常用的数字和最近更新，方便进来之后快速知道当前是什么状态。</p>
         </div>
+
+        {!dbAvailable ? (
+          <p className="admin-flash admin-flash-error">
+            当前数据库暂时连不上，后台已切到兜底模式。你仍然可以先进入其他页面查看结构。
+          </p>
+        ) : null}
 
         <div className="admin-stat-grid">
           <article className="admin-stat-card">
@@ -90,19 +124,29 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="admin-list">
-          {recentPosts.map((post) => (
-            <article key={post.id} className="admin-list-card">
+          {recentPosts.length ? (
+            recentPosts.map((post) => (
+              <article key={post.id} className="admin-list-card">
+                <div>
+                  <p className="signal-label">{postStatusLabels[post.status]}</p>
+                  <h3>{post.title}</h3>
+                  <p>{post.summary}</p>
+                </div>
+                <div className="admin-list-meta">
+                  <span>作者：{post.author.name}</span>
+                  <span>地址：{post.slug}</span>
+                </div>
+              </article>
+            ))
+          ) : (
+            <article className="admin-list-card">
               <div>
-                <p className="signal-label">{postStatusLabels[post.status]}</p>
-                <h3>{post.title}</h3>
-                <p>{post.summary}</p>
-              </div>
-              <div className="admin-list-meta">
-                <span>作者：{post.author.name}</span>
-                <span>地址：{post.slug}</span>
+                <p className="signal-label">还没有可用数据</p>
+                <h3>先从其他模块开始</h3>
+                <p>如果数据库恢复连接，这里会自动出现最近文章和更新情况。</p>
               </div>
             </article>
-          ))}
+          )}
         </div>
       </section>
 
@@ -127,9 +171,7 @@ export default async function AdminDashboardPage() {
                   <strong>{log.summary}</strong>
                   <span>{log.actor?.name ?? "系统"} / {log.targetLabel}</span>
                 </div>
-                <time dateTime={log.createdAt.toISOString()}>
-                  {formatDateTime(log.createdAt)}
-                </time>
+                <time dateTime={log.createdAt.toISOString()}>{formatDateTime(log.createdAt)}</time>
               </article>
             ))}
           </div>

@@ -1,6 +1,6 @@
-"use server";
+﻿"use server";
 
-import { PostStatus } from "@prisma/client";
+import { IncomingLinkStatus, PostStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -12,6 +12,11 @@ import {
 } from "../../lib/auth";
 import { createAuditLog } from "../../lib/audit-log";
 import { createPostReviewEvent } from "../../lib/post-review-history";
+import {
+  ingestIncomingLink,
+  ingestUrlsFromGithubWebhook,
+  normalizeSourcePlatform,
+} from "../../lib/incoming-links";
 import {
   canApprove,
   canMoveToDraft,
@@ -46,7 +51,7 @@ function normalizeOptionalText(value) {
 
 function normalizeTagList(value) {
   return String(value ?? "")
-    .split(/[,，\n]/)
+    .split(/[,锛孿n]/)
     .map((item) => item.trim())
     .filter(Boolean)
     .join(",");
@@ -480,7 +485,7 @@ export async function createAdminPost(formData) {
       targetType: "post",
       targetId: createdPost.id,
       targetLabel: title,
-      summary: `${user.name} 新建了《${title}》，当前状态是${postStatusLabels[status]}。`,
+      summary: `${user.name} 新建了《${title}》，当前状态是 ${postStatusLabels[status]}。`,
     });
   } catch {
     redirect("/admin/posts/new?error=slug-taken");
@@ -559,7 +564,7 @@ export async function updateAdminPost(formData) {
     targetType: "post",
     targetId: postId,
     targetLabel: title,
-    summary: `${user.name} 修改了《${title}》，当前状态是${postStatusLabels[status]}。`,
+    summary: `${user.name} 修改了《${title}》，当前状态是 ${postStatusLabels[status]}。`,
   });
 
   revalidatePath("/admin");
@@ -924,3 +929,163 @@ export async function runBulkAdminPostAction(formData) {
     }),
   );
 }
+
+export async function createIncomingLinkManually(formData) {
+  const user = await requireRole(["ADMIN", "EDITOR"]);
+  const url = String(formData.get("url") ?? "").trim();
+  const sourcePlatform = normalizeSourcePlatform(
+    String(formData.get("sourcePlatform") ?? "manual"),
+  );
+
+  if (!url) {
+    redirect("/admin/incoming-links?error=missing-url");
+  }
+
+  try {
+    await ingestIncomingLink({
+      url,
+      sourcePlatform,
+      actorId: user.id,
+      attemptAction: "MANUAL_SUBMIT",
+      rawPayload: {
+        source: "admin-form",
+        submittedBy: user.email,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? encodeURIComponent(error.message) : "parse-failed";
+    redirect(`/admin/incoming-links?error=${message}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/incoming-links");
+  redirect("/admin/incoming-links?success=link-received");
+}
+
+export async function simulateGithubIncomingLink() {
+  const user = await requireRole(["ADMIN", "EDITOR"]);
+
+  try {
+    await ingestUrlsFromGithubWebhook({
+      eventName: "issue_comment",
+      actorId: user.id,
+      payload: {
+        action: "created",
+        comment: {
+          body: "Please collect this link: https://www.iana.org/domains/reserved",
+        },
+        sender: {
+          login: user.email,
+        },
+        repository: {
+          full_name: "local/demo-repo",
+        },
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? encodeURIComponent(error.message) : "github-simulate-failed";
+    redirect(`/admin/incoming-links?error=${message}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/incoming-links");
+  redirect("/admin/incoming-links?success=github-simulated");
+}
+
+export async function simulateFailedIncomingLink() {
+  const user = await requireRole(["ADMIN", "EDITOR"]);
+  const originalUrl = `https://example.com/?retry-demo=${Date.now()}`;
+  const hostname = new URL(originalUrl).hostname;
+
+  const failedLink = await prisma.incomingLink.create({
+    data: {
+      sourcePlatform: "manual-failed-demo",
+      originalUrl,
+      hostname,
+      status: IncomingLinkStatus.FAILED,
+      errorMessage: "模拟了一次临时抓取失败，方便测试重新解析。",
+      actorId: user.id,
+      rawPayload: {
+        source: "admin-failed-demo",
+        submittedBy: user.email,
+      },
+    },
+  });
+
+  await createAuditLog({
+    action: "INCOMING_LINK_FAILED",
+    actorId: user.id,
+    targetType: "incoming-link",
+    targetId: failedLink.id,
+    targetLabel: originalUrl,
+    summary: `${user.name} 生成了一条失败样本，方便测试重新解析。`,
+  });
+
+  await prisma.incomingLinkAttempt.create({
+    data: {
+      incomingLinkId: failedLink.id,
+      actorId: user.id,
+      action: "FAILED_SAMPLE",
+      status: IncomingLinkStatus.FAILED,
+      message: "模拟了一次临时抓取失败，方便测试重新解析。",
+    },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/incoming-links");
+  redirect("/admin/incoming-links?success=failed-sample-created");
+}
+
+export async function retryIncomingLinkParse(formData) {
+  const user = await requireRole(["ADMIN", "EDITOR"]);
+  const incomingLinkId = String(formData.get("incomingLinkId") ?? "");
+
+  if (!incomingLinkId) {
+    redirect("/admin/incoming-links?error=missing-link-id");
+  }
+
+  const incomingLink = await prisma.incomingLink.findUnique({
+    where: { id: incomingLinkId },
+    select: {
+      id: true,
+      title: true,
+      originalUrl: true,
+      sourcePlatform: true,
+      rawPayload: true,
+    },
+  });
+
+  if (!incomingLink) {
+    redirect("/admin/incoming-links?error=link-missing");
+  }
+
+  await createAuditLog({
+    action: "INCOMING_LINK_RETRIED",
+    actorId: user.id,
+    targetType: "incoming-link",
+    targetId: incomingLink.id,
+    targetLabel: incomingLink.title || incomingLink.originalUrl,
+    summary: `${user.name} 手动重新解析了一条外部链接。`,
+  });
+
+  try {
+    await ingestIncomingLink({
+      url: incomingLink.originalUrl,
+      sourcePlatform: incomingLink.sourcePlatform,
+      actorId: user.id,
+      attemptAction: "RETRIED",
+      rawPayload: incomingLink.rawPayload,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? encodeURIComponent(error.message) : "retry-failed";
+    redirect(`/admin/incoming-links?error=${message}`);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/incoming-links");
+  redirect("/admin/incoming-links?success=link-retried");
+}
+
